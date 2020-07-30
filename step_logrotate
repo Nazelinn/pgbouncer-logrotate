@@ -1,0 +1,65 @@
+LOGROTATE
+
+Logrotate komutu /etc/logrotate.conf altında bulunur dosya boyutu belirli bir büyüklüğe ulaştığında log dosyasını rotate etme, Rotate işleminden sonra yeni log bilgileri için dosya yaratma
+Rotate edilmiş log dosyalarını sıkıştırma ,Eski log dosyalarını kaldırma ,Log dosyalarını tarihe göre saklama gibi işlemler yapılabilir.
+Logrotate komutunun çalışma  yapısı aslında bir crondur. /etc/cron.daily/logrotate dizininde günlük olarak çalışan bir shell scritp'tir.(örnek verildi
+/etc/cron.hourly/logrotate -monthly --weekly etc )
+--- etc altında logrotatein cron.daily,cron.weekly altında bulunması gerekmektedir,yoksa eğer aşağıdaki örnek gibi oluşturmanız gerekmektedir.
+
+[root@nazelin-test-04 etc]# cd cron.daily
+[root@nazelin-test-04 cron.daily]# ll
+total 12
+-rwx------  1 root root 219 Apr  1 06:26 logrotate
+-rwxr-xr-x  1 root root 618 Oct 30  2018 man-db.cron
+-rwx------. 1 root root 208 Apr 10  2018 mlocate
+--logrotate yapısı 
+[root@nazelin-test-04 cron.daily]# cat logrotate
+#!/bin/sh
+/usr/sbin/logrotate -s /var/lib/logrotate/logrotate.status /etc/logrotate.conf
+EXITVALUE=$?
+if [ $EXITVALUE != 0 ]; then
+    /usr/bin/logger -t logrotate "ALERT exited abnormally with [$EXITVALUE]"
+fi
+exit 0
+
+/etc/logrotate.d  dizini altında geldiğimizde çeşitli programlar için oluşturulmuş logrotate konfigurasyonlarının yer aldığını görüyoruz.logrotate ni oluşturmak istediğiniz
+programın /etc/logrotate.d/ altında bulunması gerekiyor.
+
+[root@nazelin-test-04 etc]# cd /etc/logrotate.d/
+[root@nazelin-test-04 logrotate.d]# ll
+total 32
+-rw-r--r--  1 root root  91 Nov 27  2019 bootlog
+-rw-r--r--  1 root root 160 Sep 19  2018 chrony
+-rw-r--r--  1 root root 275 Jun  9 20:13 pgbouncer
+-rw-r--r--  1 root root 136 Feb 27 19:46 ppp
+-rw-r--r--. 1 root root 408 Aug  3  2017 psacct
+-rw-r--r--  1 root root 224 Nov 27  2019 syslog
+-rw-r--r--  1 root root 100 Oct 31  2018 wpa_supplicant
+-rw-r--r--  1 root root 103 Apr  2 18:56 yum
+
+--pgbouncer log şişmesi olayı için logrotate de editleme yaptım ornek de nazelin-test-04 de denedim başarılı şekilde
+log'ın gzip'ını alıp içini boşaltıyor tabi boşaltma miktarını biz verebiliriz günlük olarak size 1024m dedim değişiklik yapabiliriz her beş rotateden
+sonrada var olan gzip dosyasını eski tarihe göre silecek sizde isteğe bağlı olarak logrotate günlük,haftalık yada aylık olarak editleyebilirsiniz
+
+[root@nazelin-test-04 logrotate.d]# cat pgbouncer
+/var/log/pgbouncer/pgbouncer.log {
+        missingok---Eğer log dosyası yoksa  hata mesajı vermeden bir sonrakine geçer.
+        copytruncate---Dosyanın kopyasını aldıktan sonra,dosyanın boyutunu sıfırlamak için silme işlemini gerçekleştirir.
+        compress----Eski log dosyalarını varsayılan olarak gzip olarak sıkıştırır.
+        notifempty--günlük dosyası boşsa günlük döndürmeyi önler.
+        sharedscripts---Bu yönerge, döndürülen her günlük dosyası için bir kez değil, sonra döndürme komut dosyasını çalıştıracak şekilde yapılandırır.
+        create 0640 pgbouncer pgbouncer
+        nodateext----Tarih uzantılı günlük dosyalarının eski sürümlerini arşivlemez
+        daily---Rotate işlemini günlük olarak gerçeleştirir.
+        rotate 5 ----son 5 güne ait log dosyaları saklanacak.Bunun için eski log dosyaları tarih sırasına göre silinecek.
+		size 1024M
+        postrotate
+                /bin/kill -HUP `cat /var/run/pgbouncer/pgbouncer.pid  2>/dev/null` 2> /dev/null || true
+        endscript
+}
+
+---Komutun genel yapısı aşağıdaki gibidir.
+logrotate  [-dv]  [-f|--force]  [-s|--state file]  config_file 
+manuel çalıştırma : logrotate -f /etc/logrotate.conf
+hata oluncada görme : logrotate -dv /etc/logrotate.d/pgbouncer
+Parametrelerle ilgili ayrıntılı bilgilere man logrotate komutu ile ulaşabiliriz
